@@ -18,6 +18,7 @@ class BaseMigrationScript(object):
     _TEXT_WARNINGS = {}
     _DEPRECATED_MODULES = []
     _FILE_RENAMES = {}
+    _RENAMED_MODELS = []
     _GLOBAL_FUNCTIONS = []  # [function_object]
     _module_path = ''
 
@@ -54,6 +55,11 @@ class BaseMigrationScript(object):
             "_FILE_RENAMES": {
                 "type": TYPE_DICT,
                 "doc": {},
+            },
+            # [(old.model.name, new.model.name, more_info)]
+            "_RENAMED_MODELS": {
+                "type": TYPE_ARRAY,
+                "doc": [],
             },
         }
         # read
@@ -176,9 +182,11 @@ class BaseMigrationScript(object):
             )
             absolute_file_path = os.path.join(root, new_name)
 
+        renamed_models = self.handle_renamed_models(self._RENAMED_MODELS)
         # Operate changes in the file (replacements, removals)
         replaces = self._TEXT_REPLACES.get("*", {})
         replaces.update(self._TEXT_REPLACES.get(extension, {}))
+        replaces.update(renamed_models.get('replaces'))
 
         new_text = tools._replace_in_file(
             absolute_file_path, replaces,
@@ -188,12 +196,14 @@ class BaseMigrationScript(object):
         # pattern
         errors = self._TEXT_ERRORS.get("*", {})
         errors.update(self._TEXT_ERRORS.get(extension, {}))
+        errors.update(renamed_models.get('errors'))
         for pattern, error_message in errors.items():
             if re.findall(pattern, new_text):
                 logger.error(error_message)
 
         warnings = self._TEXT_WARNINGS.get("*", {})
         warnings.update(self._TEXT_WARNINGS.get(extension, {}))
+        warnings.update(renamed_models.get('warnings'))
         for pattern, warning_message in warnings.items():
             if re.findall(pattern, new_text):
                 logger.warning(
@@ -254,6 +264,45 @@ class BaseMigrationScript(object):
                             old_module, new_module, old_module))
         if current_manifest_text != new_manifest_text:
             tools._write_content(manifest_path, new_manifest_text)
+
+    def handle_renamed_models(self, renamed_models):
+        ''' renamed_models = [(old.model, new.model, msg)]
+            returns dictionary of all replaces / warnings / errors produced
+            by a model renamed
+            {
+                'replaces':
+                    {
+                        "old_model_name", 'old_model_name': new_model_name
+                        old_table_name["',]: new_table_name["',]
+                    },
+                'warnings':
+                    {
+                        old.model.name: warning msg
+                        old_model_name: warning msg
+                    }
+            }
+        '''
+        res = {'replaces': {}, 'warnings': {}, 'errors': {}}
+        for old_model_name, new_model_name, more_info in renamed_models:
+            old_table_name = old_model_name.replace('.', '_')
+            new_table_name = new_model_name.replace('.', '_')
+            old_name_esc = re.escape(old_model_name)
+            res['replaces'].update({
+                r"\"%s\"" % old_name_esc: '"%s"' % new_model_name,
+                r"\'%s\'" % old_name_esc: "'%s'" % new_model_name,
+                r"\"%s\"" % old_table_name: "\"%s\"" % new_table_name,
+                r"\'%s\'" % old_table_name: "'%s'" % new_table_name,
+                r"model_%s\"" % old_table_name: "model_%s\"" % new_table_name,
+                r"model_%s\'" % old_table_name: "model_%s'" % new_table_name,
+                r"model_%s," % old_table_name: "model_%s," % new_table_name,
+            })
+            msg = "The model %s has been renamed to %s.%s" % (
+                old_model_name, new_model_name, (" %s" % more_info) or "")
+            res['warnings'].update({
+                old_name_esc: msg,
+                old_table_name: msg,
+            })
+        return res
 
     def _get_correct_manifest_path(self, manifest_path, file_renames):
         current_manifest_file_name = manifest_path.as_posix().split('/')[-1]
