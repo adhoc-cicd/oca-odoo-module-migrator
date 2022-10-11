@@ -9,6 +9,11 @@ _TEXT_REPLACES = {
     },
 }
 
+_RENAMED_MODELS = [
+    ("stock.production.lot", "stock.lot", None),
+]
+
 
 class MigrationScript(BaseMigrationScript):
     _TEXT_REPLACES = _TEXT_REPLACES
+    _RENAMED_MODELS = _RENAMED_MODELS
