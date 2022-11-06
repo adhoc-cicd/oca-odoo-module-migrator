@@ -9,6 +9,17 @@ _TEXT_REPLACES = {
     },
 }
 
+_RENAMED_MODELS = [
+    ("stock.production.lot", "stock.lot", None),
+]
+
+_REMOVED_MODELS = [
+    ("account.account.type",
+        "Commit https://github.com/odoo/odoo/commit/26b2472f4977ccedbb0b5ed5f")
+]
+
 
 class MigrationScript(BaseMigrationScript):
     _TEXT_REPLACES = _TEXT_REPLACES
+    _RENAMED_MODELS = _RENAMED_MODELS
+    _REMOVED_MODELS = _REMOVED_MODELS
