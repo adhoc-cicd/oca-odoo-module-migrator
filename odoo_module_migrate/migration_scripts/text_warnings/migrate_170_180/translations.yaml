@@ -1,0 +1,2 @@
+.py:
+  from odoo import .*_: "[18] The '_' symbol should no longer be imported directly for translations. Remove '_' from the 'from odoo import' statement, and replace any instances of '_('text')' with 'self.env._('text')'. This change is required for better context handling. More details: https://github.com/odoo/odoo/pull/174844"
