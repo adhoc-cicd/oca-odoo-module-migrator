@@ -8,8 +8,11 @@
 
 from colorama import Fore, Style
 import time
+from tqdm import tqdm
 
 import logging
+
+logging.StreamHandler.emit = lambda self, record: tqdm.write(self.format(record))
 
 logger = logging.getLogger(__name__)
 
