@@ -47,5 +47,4 @@ def upgrade_sql_constraints(
 
 
 class MigrationScript(BaseMigrationScript):
-
     _GLOBAL_FUNCTIONS = [upgrade_sql_constraints]
