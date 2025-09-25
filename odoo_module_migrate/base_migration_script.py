@@ -12,6 +12,7 @@ import yaml
 import importlib
 import requests
 from tqdm import tqdm
+from .ai_migration_helper import AIMigrationHelper
 
 
 class BaseMigrationScript(object):
@@ -25,11 +26,13 @@ class BaseMigrationScript(object):
     _RENAMED_MODELS = []
     _REMOVED_MODELS = []
     _GLOBAL_FUNCTIONS = []  # [function_object]
+    _AI_TRANSFORMS = []
     _module_path = ""
 
     def __init__(self):
         self._warnings_by_message = {}
         self._repo_root = None
+        self._ai_helper = AIMigrationHelper()
 
     def _get_controller_data(self, version_from_to):
         # data = request.get(url, version_from, version_to)
@@ -353,6 +356,11 @@ class BaseMigrationScript(object):
             rel_files = [os.path.relpath(f, self._repo_root) for f in sorted(files)]
             logger.warning("%s\n  %s" % (warning_message, "\n  ".join(rel_files)))
 
+        for suggestion in self._ai_helper.suggestions:
+            logger.info("AI Suggestion:\n%s" % suggestion)
+
+        self._ai_helper.suggestions.clear()
+
     def process_file(
         self, root, filename, extension, file_renames, directory_path, commit_enabled
     ):
@@ -416,6 +424,11 @@ class BaseMigrationScript(object):
                 self._RENAMED_FIELDS,
                 self._REMOVED_FIELDS,
                 self._warnings_by_message,
+            )
+
+        if self._AI_TRANSFORMS:
+            self._ai_helper.apply_ai_transforms(
+                content=new_text, ai_transforms=self._AI_TRANSFORMS
             )
 
     def handle_removed_fields(self, removed_fields):
