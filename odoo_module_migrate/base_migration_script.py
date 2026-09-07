@@ -52,21 +52,45 @@ class BaseMigrationScript(object):
         return self._get_changes_from_adhoc(version_from, version_to)
 
     def _get_changes_from_adhoc(self, init_version_name, target_version_name):
+        # The version changes catalog (removed / renamed fields and models) is
+        # the only place where a migration learns that a core field it uses is
+        # gone. When it cannot be fetched the run still completes and looks
+        # fine, so every way of not having it is logged as an ERROR: a silent
+        # skip here is a silently incomplete migration.
+        pair = "%s -> %s" % (init_version_name, target_version_name)
         base_url = os.getenv("ADHOC_URL", False)
         if not base_url:
-            logger.warning("No ADHOC_URL env variable found. Version Changes skipped")
+            logger.error(
+                "No ADHOC_URL env variable found. Version Changes SKIPPED for %s: "
+                "removed or renamed fields and models will not be reported." % pair
+            )
             return False
         endpoint = "/version_changes/{from_version}/{to_version}".format(
             from_version=init_version_name, to_version=target_version_name
         )
-        uri = base_url + endpoint
+        uri = base_url.rstrip("/") + endpoint
         self._requests = requests.Session()
-        response = self._requests.get(uri)
-
-        if response and response.ok:
-            data_version_changes = response.json()
-            return data_version_changes
-        return False
+        try:
+            response = self._requests.get(uri, timeout=30)
+        except requests.RequestException as exc:
+            logger.error(
+                "Version Changes SKIPPED for %s: %s did not answer (%s)."
+                % (pair, uri, exc)
+            )
+            return False
+        if not response.ok:
+            logger.error(
+                "Version Changes SKIPPED for %s: %s answered HTTP %s."
+                % (pair, uri, response.status_code)
+            )
+            return False
+        data_version_changes = response.json()
+        if not data_version_changes:
+            logger.warning(
+                "Version Changes for %s: %s answered an EMPTY catalog. The pair may "
+                "not be loaded yet; removed fields will not be reported." % (pair, uri)
+            )
+        return data_version_changes
 
     def parse_rules(self):
         script_parts = inspect.getfile(self.__class__).split("/")
@@ -335,7 +359,7 @@ class BaseMigrationScript(object):
 
         all_files = []
         for root, directories, filenames in os.walk(module_path.resolve()):
-            if 'migrations' in root.split(os.sep):
+            if "migrations" in root.split(os.sep):
                 continue
             for filename in filenames:
                 extension = os.path.splitext(filename)[1]
